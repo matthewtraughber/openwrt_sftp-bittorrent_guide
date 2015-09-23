@@ -1,7 +1,7 @@
 # OpenWRT SFTP & BitTorrent server
 This guide is intended to walk a user through building a router-based multi-user SFTP & BitTorrent (using [Transmission](http://www.transmissionbt.com/)) server with [OpenWRT](https://openwrt.org/). You should have a working router running OpenWRT (and LuCI) before starting. Upon completion, you will have a router with seedbox capabilities. SFTP users (that you manage) will be able to download files from shared directories without having router shell access.
 
-Don't need BitTorrent transfers? Skip The Transmission section and transfer local data to the SFTP server via Samba.
+Don't need BitTorrent transfers? Skip the Transmission section and transfer local data to the SFTP server via Samba.
 
 > #### NOTE!
 > * This guide assumes you are familiar with command-line terminals and VIM or another command-line text editor
