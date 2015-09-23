@@ -108,37 +108,37 @@ opkg install sudo
 visudo
 ```
   * Uncomment the two lines below
-  ``` bash
-  Defaults targetpw  # Ask for the password of the target user
-  ALL ALL=(ALL) ALL  # WARNING: only use this together with 'Defaults targetpw'
-  ```
+``` bash
+Defaults targetpw  # Ask for the password of the target user
+ALL ALL=(ALL) ALL  # WARNING: only use this together with 'Defaults targetpw'
+```
 * Save and close ``` /etc/sudoers ```
 * Edit SSH configuration file
 ``` bash
 vim /etc/ssh/sshd_config
 ```
   * Set SSH & SFTP port
-  ``` bash
-  Port [your_desired_port]
-  ```
+``` bash
+Port [your_desired_port]
+```
   * Disable root SSH access
-  ``` bash
-  PermitRootLogin no
-  ```
+``` bash
+PermitRootLogin no
+```
   * Change SFTP server from ``` Subsystem sftp /usr/lib/sftp-server ``` to:
-  ``` bash
-  Subsystem sftp internal-sftp
-  ```
+``` bash
+Subsystem sftp internal-sftp
+```
   * Configure chroot for SFTP group
-  ``` bash
-  Match Group [sftp_group_name]
-          ForceCommand internal-sftp
-          ChrootDirectory %h
-          AllowTcpForwarding no
-          PermitTunnel no
-          X11Forwarding no
-          AllowAgentForwarding no
-  ```
+``` bash
+Match Group [sftp_group_name]
+        ForceCommand internal-sftp
+        ChrootDirectory %h
+        AllowTcpForwarding no
+        PermitTunnel no
+        X11Forwarding no
+        AllowAgentForwarding no
+```
 * Save and close SSH configuration file
 * Restart SSH
 ``` bash
@@ -171,17 +171,17 @@ block detect > /etc/config/fstab
 vim /etc/config/fstab
 ```
   * Enable network drive HDD and SWAP (add option to both mount configs)
-  ``` bash
-  option enabled '1'
-  ```
+``` bash
+option enabled '1'
+```
   * Enable read/write for network drive HDD
-  ``` bash
-  option options 'rw'
-  ```
+``` bash
+option options 'rw'
+```
   * For the network drive HDD, change target to your naming preference
-  ``` bash
-  option target '/mnt/[network_drive]'
-  ```
+``` bash
+option target '/mnt/[network_drive]'
+```
 * Save and close fstab
 
 #### Grant users directory access
@@ -191,14 +191,14 @@ mkdir /home/[username]/[shared_directory]
 ```
 * Link ``` /home/[username]/[shared_directory] ``` to ``` /mnt/[network_drive]/[shared_directory] ``` on router startup
   * Edit router startup file
-  ``` bash
-  vim /etc/rc.local
-  ```
+``` bash
+vim /etc/rc.local
+```
   * Add to ``` /etc/rc.local ``` before the ``` exit 0 ``` line **(repeat for each user and shared directory)**
-  ``` bash
-  # Mounts network drive for SFTP users (remember to create /home/[username]/[shared_directory] first)
-  mount --bind /mnt/[network_drive]/[shared_directory]/ /home/[username]/[shared_directory]/
-  ```
+``` bash
+# Mounts network drive for SFTP users (remember to create /home/[username]/[shared_directory] first)
+mount --bind /mnt/[network_drive]/[shared_directory]/ /home/[username]/[shared_directory]/
+```
 * Restart router
 
 **_At this point users can (locally) login and access directories on the network drive you gave them access to. Permissions will be set in the next section._**
@@ -249,14 +249,14 @@ opkg install luci-app-samba
 vim /etc/samba/smb.conf.template
 ```
   * Add the following lines to ``` /etc/samba/smb.conf.template ```
-  ``` bash
-  force create mode = 0775
-  force directory mode = 0775
-  ```
+``` bash
+force create mode = 0775
+force directory mode = 0775
+```
   * Remove or comment the following line from ``` /etc/samba/smb.conf.template ``` (we will be using root to access the drive via your local network)
-  ``` bash
-  invalid users = root
-  ```
+``` bash
+invalid users = root
+```
 * Add Samba user(s) (they must exist in ``` /etc/passwd ``` - I used the root user to keep root ownership of files and directories)
 ``` bash
 smbpasswd -a [username]
@@ -273,17 +273,17 @@ opkg install luci-app-transmission transmission-web
 ```
 * Configure Transmission via LuCI to preferred settings (most will depend on your ISP speed)
   * Point configuration directory to the network drive
-  ``` bash
-  config file directory = /mnt/[network_drive]/transmission
-  ```
+``` bash
+config file directory = /mnt/[network_drive]/transmission
+```
   * Set the network drive as the download directory
-  ``` bash
-  download directory = /mnt/[network_drive]/[specific_directory]
-  ```
+``` bash
+download directory = /mnt/[network_drive]/[specific_directory]
+```
   * Set umask to 2 (equates to 002) so the correct permissions (775) are set on new files and directories
-  ``` bash
-  umask = 2
-  ```
+``` bash
+umask = 2
+```
 
 Make sure you configure a RPC username and password for Transmission. Once secured, you can disable the RPC whitelist to enable remote Transmission access (you'll still need to configure a firewall exception for Transmission web interface access).
 
