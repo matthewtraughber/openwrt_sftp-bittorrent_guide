@@ -265,7 +265,8 @@ smbpasswd -a [username]
 
 **_At this point you can mount your network drive locally in Windows via the "Map Network Drive" feature._**
 
-### Transmission
+### BitTorrent
+#### Configure Transmission client
 * Install necessary Transmission packages
 ``` bash
 opkg install luci-app-transmission transmission-web
@@ -285,6 +286,14 @@ opkg install luci-app-transmission transmission-web
   ```
 
 Make sure you configure a RPC username and password for Transmission. Once secured, you can disable the RPC whitelist to enable remote Transmission access (you'll still need to configure a firewall exception for Transmission web interface access).
+
+#### New content permissions
+Files downloaded by Transmission won't mirror the existing file/directory permissions, and Transmission settings don't allow the level of control necessary. To work around this, we create a cron job to update permissions for any new content.
+* Add a cron job to OpenWRT via LuCI (System -> Scheduled Tasks)
+``` bash
+# Runs every 10 minutes to apply permissions and setgid over /mnt/[network_drive]/ (to account for data created by luci-app-transmission)
+*/10 * * * * /bin/chmod -R 2775 /mnt/[network_drive]
+```
 
 ## Wrap-up
 And that's all folks. You can view Transmission web interface documentation [here](https://trac.transmissionbt.com/wiki/WebInterface). The number of BitTorrent transfers possible will depend on your specific router and OpenWRT release stability.
