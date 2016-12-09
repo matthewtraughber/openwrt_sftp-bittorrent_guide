@@ -1,0 +1,516 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>OpenWRT sftp-bittorrent guide by matthewtraughber</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+    <meta name="viewport" content="width=device-width">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>OpenWRT sftp-bittorrent guide</h1>
+        <p>Guide to create an OpenWRT SFTP &amp; BitTorrent server</p>
+
+        <p class="view"><a href="https://github.com/matthewtraughber/openwrt_sftp-bittorrent_guide">View the Project on GitHub <small>matthewtraughber/openwrt_sftp-bittorrent_guide</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/matthewtraughber/openwrt_sftp-bittorrent_guide/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/matthewtraughber/openwrt_sftp-bittorrent_guide/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/matthewtraughber/openwrt_sftp-bittorrent_guide">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a id="openwrt-sftp--bittorrent-server" class="anchor" href="#openwrt-sftp--bittorrent-server" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>OpenWRT SFTP &amp; BitTorrent server</h1>
+
+<p>This guide is intended to walk a user through building a router-based multi-user SFTP &amp; BitTorrent (using <a href="http://www.transmissionbt.com/">Transmission</a>) server with <a href="https://openwrt.org/">OpenWRT</a>. You should have a working router running OpenWRT (and LuCI) before starting. Upon completion, you will have a router with seedbox capabilities. SFTP users (that you manage) will be able to download files from shared directories without having router shell access.</p>
+
+<p>Don't need BitTorrent transfers? Skip the Transmission section and transfer local data to the SFTP server via Samba.</p>
+
+<blockquote>
+<h4>
+<a id="note" class="anchor" href="#note" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>NOTE!</h4>
+
+<ul>
+<li>This guide assumes you are familiar with command-line terminals and VIM or another command-line text editor</li>
+<li>Text within brackets such as <strong><em>[username]</em></strong> are variables to be replaced at your discretion</li>
+<li>All commands are to be run as the root user (use <code>sudo -i</code> after disabling root SSH access)</li>
+</ul>
+</blockquote>
+
+<h2>
+<a id="prerequisites" class="anchor" href="#prerequisites" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Prerequisites</h2>
+
+<h3>
+<a id="hardware" class="anchor" href="#hardware" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Hardware</h3>
+
+<ul>
+<li>USB storage drive formatted EXT4 <strong>(NTFS-3G is a stable read/write NTFS driver, but is too slow for this implementation)</strong>
+</li>
+<li>USB swap drive formatted SWAP <strong>(optional)</strong>
+</li>
+</ul>
+
+<h3>
+<a id="software" class="anchor" href="#software" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Software</h3>
+
+<p>Via SSH, update OPKG (Open PacKaGe Management).</p>
+
+<div class="highlight highlight-source-shell"><pre>opkg update</pre></div>
+
+<h2>
+<a id="setup" class="anchor" href="#setup" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Setup</h2>
+
+<h3>
+<a id="replace-dropbear-with-openssh" class="anchor" href="#replace-dropbear-with-openssh" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Replace Dropbear with OpenSSH</h3>
+
+<p>Dropbear doesn't work with  openssh-sftp-server, so we will replace it with OpenSSH to create a multi-user SFTP server.</p>
+
+<ul>
+<li>Via LuCI, change Dropbear port to something other than 22 (I used 44)</li>
+<li>Connect to router via Dropbear SSH on the new port</li>
+<li>Install OpenSSH (and SFTP)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install openssh-server openssh-sftp-server</pre></div>
+
+<ul>
+<li>Enable &amp; start OpenSSH</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>/etc/init.d/sshd <span class="pl-c1">enable</span></pre></div>
+
+<div class="highlight highlight-source-shell"><pre>/etc/init.d/sshd start</pre></div>
+
+<ul>
+<li>Log out of Dropbear SSH and reconnect with OpenSSH (using port 22 now)</li>
+<li>Stop &amp; disable Dropbear</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>/etc/init.d/dropbear disable</pre></div>
+
+<div class="highlight highlight-source-shell"><pre>/etc/init.d/dropbear stop</pre></div>
+
+<ul>
+<li>Via LuCI, delete the Dropbear instance</li>
+</ul>
+
+<h3>
+<a id="users-and-groups" class="anchor" href="#users-and-groups" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Users and groups</h3>
+
+<h4>
+<a id="add-openwrt-users" class="anchor" href="#add-openwrt-users" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Add OpenWRT users</h4>
+
+<ul>
+<li>Install necessary packages to manage users and groups</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install shadow-useradd shadow-groupadd shadow-userdel shadow-groupdel shadow-groupmod shadow-usermod</pre></div>
+
+<ul>
+<li>Add users, making sure to add a user to be designated as an administrator to use instead of the root user <strong>(repeat for each user)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>useradd [username]</pre></div>
+
+<ul>
+<li>Add home directory</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>mkdir /home</pre></div>
+
+<ul>
+<li>Add user home directories <strong>(repeat for each user)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>mkdir /home/[username]</pre></div>
+
+<ul>
+<li>Set user passwords - this is necessary because we won't be giving SFTP users shell access <strong>(repeat for each user)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>passwd [username]</pre></div>
+
+<h4>
+<a id="configure-shell-access-for-new-users" class="anchor" href="#configure-shell-access-for-new-users" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Configure shell access for new users</h4>
+
+<ul>
+<li>Add shell access for the administrative user created above</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>usermod -s /bin/ash [admin_username]</pre></div>
+
+<ul>
+<li>Disable shell access for the SFTP users created above <strong>(repeat for each user)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>usermod -s /bin/false [sftp_username]</pre></div>
+
+<h4>
+<a id="create-groups-to-manage-access-rights" class="anchor" href="#create-groups-to-manage-access-rights" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Create groups to manage access rights</h4>
+
+<ul>
+<li>Create an administrator group (this will be assigned to the administrative user created above)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>groupadd [admin_group_name]</pre></div>
+
+<ul>
+<li>Create a SFTP  group (this will be the read-only SFTP-access-only user group)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>groupadd [sftp_group_name]</pre></div>
+
+<h4>
+<a id="assign-groups-to-users" class="anchor" href="#assign-groups-to-users" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Assign groups to users</h4>
+
+<ul>
+<li>Assign administrator group to the administrative user</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>usermod -G [admin_group_name] [admin_username]</pre></div>
+
+<ul>
+<li>Assign SFTP group to SFTP users <strong>(repeat for each user)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>usermod -G [sftp_group_name] [sftp_username]</pre></div>
+
+<h4>
+<a id="secure-ssh-access" class="anchor" href="#secure-ssh-access" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Secure SSH access</h4>
+
+<ul>
+<li>Install sudo to allow temporary privileged access</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install sudo</pre></div>
+
+<ul>
+<li>Edit <code>/etc/sudoers</code> to let any user 'sudo' with root password</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>visudo</pre></div>
+
+<ul>
+<li>Uncomment the two lines below</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>Defaults targetpw  <span class="pl-c"># Ask for the password of the target user</span>
+ALL ALL=(ALL) ALL  <span class="pl-c"># WARNING: only use this together with 'Defaults targetpw'</span></pre></div>
+
+<ul>
+<li>Save and close <code>/etc/sudoers</code>
+</li>
+<li>Edit SSH configuration file</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>vim /etc/ssh/sshd_config</pre></div>
+
+<ul>
+<li>Set SSH &amp; SFTP port</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>Port [your_desired_port]</pre></div>
+
+<ul>
+<li>Disable root SSH access</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>PermitRootLogin no</pre></div>
+
+<ul>
+<li>Change SFTP server from <code>Subsystem sftp /usr/lib/sftp-server</code> to:</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>Subsystem sftp internal-sftp</pre></div>
+
+<ul>
+<li>Configure chroot for SFTP group</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>Match Group [sftp_group_name]
+        ForceCommand internal-sftp
+        ChrootDirectory %h
+        AllowTcpForwarding no
+        PermitTunnel no
+        X11Forwarding no
+        AllowAgentForwarding no</pre></div>
+
+<ul>
+<li>Save and close SSH configuration file</li>
+<li>Restart SSH</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>/etc/init.d/sshd restart</pre></div>
+
+<p><strong><em>At this point you can test SSH and SFTP access for the administrator and other users. Root SSH access is now disabled (use <code>sudo -i</code> as the administrative user to gain sudo privileges) Later on we'll be adding mount points so there's actually a point for SFTP-only users to access the router.</em></strong></p>
+
+<h3>
+<a id="storage" class="anchor" href="#storage" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Storage</h3>
+
+<h4>
+<a id="connect-hardware" class="anchor" href="#connect-hardware" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Connect hardware</h4>
+
+<p>Connect your EXT4 USB HDD to the router and if applicable, connect your SWAP formatted USB flash drive. The EXT4 HDD will be used as a network drive to store BitTorrent data in addition to Transmission configuration files.</p>
+
+<h4>
+<a id="install-necessary-packages" class="anchor" href="#install-necessary-packages" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Install necessary packages</h4>
+
+<ul>
+<li>To read/write EXT4 filesystems</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install kmod-fs-ext4</pre></div>
+
+<ul>
+<li>To manage drives, including SWAP</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install block-mount</pre></div>
+
+<h4>
+<a id="configure-fstab" class="anchor" href="#configure-fstab" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Configure fstab</h4>
+
+<ul>
+<li>Pre-fill fstab with necessary device information</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>block detect <span class="pl-k">&gt;</span> /etc/config/fstab</pre></div>
+
+<ul>
+<li>Edit fstab</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>vim /etc/config/fstab</pre></div>
+
+<ul>
+<li>Enable network drive HDD and SWAP (add option to both mount configs)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>option enabled <span class="pl-s"><span class="pl-pds">'</span>1<span class="pl-pds">'</span></span></pre></div>
+
+<ul>
+<li>Enable read/write for network drive HDD</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>option options <span class="pl-s"><span class="pl-pds">'</span>rw<span class="pl-pds">'</span></span></pre></div>
+
+<ul>
+<li>For the network drive HDD, change target to your naming preference</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>option target <span class="pl-s"><span class="pl-pds">'</span>/mnt/[network_drive]<span class="pl-pds">'</span></span></pre></div>
+
+<ul>
+<li>Save and close fstab</li>
+</ul>
+
+<h4>
+<a id="grant-users-directory-access" class="anchor" href="#grant-users-directory-access" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Grant users directory access</h4>
+
+<ul>
+<li>Within each SFTP user's home directory at <code>/home/[username]</code>, create top-level directories mirroring <code>/mnt/[network_drive]/[shared_directory]</code> <strong>(repeat for each user and shared directory)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>mkdir /home/[username]/[shared_directory]</pre></div>
+
+<ul>
+<li>Link <code>/home/[username]/[shared_directory]</code> to <code>/mnt/[network_drive]/[shared_directory]</code> on router startup
+
+<ul>
+<li>Edit router startup file</li>
+</ul>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>vim /etc/rc.<span class="pl-k">local</span></pre></div>
+
+<ul>
+<li>Add to <code>/etc/rc.local</code> before the <code>exit 0</code> line <strong>(repeat for each user and shared directory)</strong>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"># Mounts network drive for SFTP users (remember to create /home/[username]/[shared_directory] first)</span>
+mount --bind /mnt/[network_drive]/[shared_directory]/ /home/[username]/[shared_directory]/</pre></div>
+
+<ul>
+<li>Restart router</li>
+</ul>
+
+<p><strong><em>At this point users can (locally) login and access directories on the network drive you gave them access to. Permissions will be set in the next section.</em></strong></p>
+
+<h3>
+<a id="permissions" class="anchor" href="#permissions" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Permissions</h3>
+
+<p>We need to ensure permissions are set correctly on the network drive so that the SFTP group cannot write anything to the drive. We should also give the administrator group write access.</p>
+
+<ul>
+<li>Start by ensuring everything on the drive is initially owned by root</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>chown -R root:root /mnt/[network_drive]
+chmod -R 755 /mnt/[network_drive]</pre></div>
+
+<p><strong><em>At this point, the SFTP and administrator groups only have read access to the shared directories.</em></strong></p>
+
+<ul>
+<li>Assign the network drive to the administrator group</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>chgrp -R [admin_group_name] /mnt/[network_drive]</pre></div>
+
+<ul>
+<li>Grant write access to the administrator group</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>chmod -R 775 /mnt/[network_drive]</pre></div>
+
+<ul>
+<li>Now, we need to ensure the administrator group stays assigned for all new files and directories. We make it 'stick' with the sticky bit.</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>chmod -R g+s /mnt/[network_drive]</pre></div>
+
+<p><strong><em>At this point permissions have been correctly configured. After configuring DDNS, your users will be able to safely access your shared directories.</em></strong></p>
+
+<h3>
+<a id="ddns" class="anchor" href="#ddns" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>DDNS</h3>
+
+<p>There are many different DDNS options available. Follow the guide <a href="http://wiki.openwrt.org/doc/howto/ddns.client">here</a> to choose and configure a DDNS client that best meets your needs.</p>
+
+<blockquote>
+<h6>
+<a id="note-add-a-firewall-exception-for-sshsftp-remote-access" class="anchor" href="#note-add-a-firewall-exception-for-sshsftp-remote-access" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>NOTE: Add a firewall exception for SSH/SFTP remote access</h6>
+
+<p><img src="http://i.imgur.com/OqLvVoO.png" alt="Example of firewall exception in /etc/config/firewall"></p>
+</blockquote>
+
+<p><strong><em>At this point your users will be able to access your shared directories remotely by using your DDNS address and SSH/SFTP port.</em></strong></p>
+
+<h3>
+<a id="samba-optional" class="anchor" href="#samba-optional" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Samba (optional)</h3>
+
+<p>If you're on a Windows-based system, you'll want to access your network drive via Windows File Explorer.</p>
+
+<ul>
+<li>Install Samba</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install luci-app-samba</pre></div>
+
+<ul>
+<li>Configure Samba through LuCI (settings are pretty self-explanatory)
+<img src="http://i.imgur.com/uXtFGBP.png" alt="Example of LuCI Samba configuration">
+</li>
+<li>Edit <code>/etc/samba/smb.conf.template</code>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>vim /etc/samba/smb.conf.template</pre></div>
+
+<ul>
+<li>Add the following lines to <code>/etc/samba/smb.conf.template</code>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>force create mode = 0775
+force directory mode = 0775</pre></div>
+
+<ul>
+<li>Remove or comment the following line from <code>/etc/samba/smb.conf.template</code> (we will be using root to access the drive via your local network)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>invalid users = root</pre></div>
+
+<ul>
+<li>Add Samba user(s) (they must exist in <code>/etc/passwd</code> - I used the root user to keep root ownership of files and directories)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>smbpasswd -a [username]</pre></div>
+
+<blockquote>
+<h6>
+<a id="note-the-password-you-set-here-is-different-than-the-sshsftp-password-set-for-the-user" class="anchor" href="#note-the-password-you-set-here-is-different-than-the-sshsftp-password-set-for-the-user" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>NOTE: The password you set here is different than the SSH/SFTP password set for the user.</h6>
+</blockquote>
+
+<p><strong><em>At this point you can mount your network drive locally in Windows via the "Map Network Drive" feature.</em></strong></p>
+
+<h3>
+<a id="bittorrent" class="anchor" href="#bittorrent" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>BitTorrent</h3>
+
+<h4>
+<a id="configure-transmission-client" class="anchor" href="#configure-transmission-client" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Configure Transmission client</h4>
+
+<ul>
+<li>Install necessary Transmission packages</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>opkg install luci-app-transmission transmission-web</pre></div>
+
+<ul>
+<li>Configure Transmission via LuCI to preferred settings (most will depend on your ISP speed)
+
+<ul>
+<li>Point configuration directory to the network drive</li>
+</ul>
+</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>config file directory = /mnt/[network_drive]/transmission</pre></div>
+
+<ul>
+<li>Set the network drive as the download directory</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre>download directory = /mnt/[network_drive]/[specific_directory]</pre></div>
+
+<ul>
+<li>Set umask to 2 (equates to 002) so the correct permissions (775) are set on new files and directories</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre><span class="pl-c1">umask</span> = 2</pre></div>
+
+<p>Make sure you configure a RPC username and password for Transmission. Once secured, you can disable the RPC whitelist to enable remote Transmission access (you'll still need to configure a firewall exception for Transmission web interface access).</p>
+
+<h4>
+<a id="new-content-permissions" class="anchor" href="#new-content-permissions" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>New content permissions</h4>
+
+<p>Files downloaded by Transmission won't mirror the existing file/directory permissions, and Transmission settings don't allow the level of control necessary. To work around this, we create a cron job to update permissions for any new content.</p>
+
+<ul>
+<li>Add a cron job to OpenWRT via LuCI (System -&gt; Scheduled Tasks)</li>
+</ul>
+
+<div class="highlight highlight-source-shell"><pre><span class="pl-c"># Runs every 10 minutes to apply permissions and setgid over /mnt/[network_drive]/ (to account for data created by luci-app-transmission)</span>
+<span class="pl-k">*</span>/10 <span class="pl-k">*</span> <span class="pl-k">*</span> <span class="pl-k">*</span> <span class="pl-k">*</span> /bin/chmod -R 2775 /mnt/[network_drive]</pre></div>
+
+<h2>
+<a id="wrap-up" class="anchor" href="#wrap-up" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Wrap-up</h2>
+
+<p>And that's all folks. You can view Transmission web interface documentation <a href="https://trac.transmissionbt.com/wiki/WebInterface">here</a>. The number of BitTorrent transfers possible will depend on your specific router and OpenWRT release stability.</p>
+
+<p>I'll add additional information (and potentially some media of the finished product) in the future. Questions or found a bug? Email me at <a href="mailto:me@matthewtraughber.com">me@matthewtraughber.com</a> or create an issue or pull request.</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/matthewtraughber">matthewtraughber</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
