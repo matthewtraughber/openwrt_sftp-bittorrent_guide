@@ -232,7 +232,7 @@ chmod -R g+s /mnt/[network_drive]
 There are many different DDNS options available. Follow the guide [here](http://wiki.openwrt.org/doc/howto/ddns.client) to choose and configure a DDNS client that best meets your needs.
 
 > ###### NOTE: Add a firewall exception for SSH/SFTP remote access
-> ![Example of firewall exception in /etc/config/firewall](http://i.imgur.com/OqLvVoO.png)
+> ![Example of firewall exception in /etc/config/firewall](img/firewall.png)
 
 **_At this point your users will be able to access your shared directories remotely by using your DDNS address and SSH/SFTP port._**
 
@@ -243,7 +243,7 @@ If you're on a Windows-based system, you'll want to access your network drive vi
 opkg install luci-app-samba
 ```
 * Configure Samba through LuCI (settings are pretty self-explanatory)
-![Example of LuCI Samba configuration](http://i.imgur.com/uXtFGBP.png)
+![Example of LuCI Samba configuration](img/samba.png)
 * Edit ``` /etc/samba/smb.conf.template ```
 ``` bash
 vim /etc/samba/smb.conf.template
